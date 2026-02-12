@@ -65,20 +65,27 @@ class NairobiCityEnv(gym.Env):
 
     # Horizontal roads
         pg.draw.line(screen, white, (0, 200), (width, 200), size_line)
+        pg.draw.line(screen, Black, (0, 200), (width, 200), size_line//10)
         pg.draw.line(screen, white, (0, 400), (width, 400), size_line)
+        pg.draw.line(screen, Black, (0, 400), (width, 400), size_line//10)
         pg.draw.line(screen, white, (0, 600), (width, 600), size_line)
+        pg.draw.line(screen, Black, (0, 600), (width, 600), size_line//10)
 
     # Vertical roads
         pg.draw.line(screen, white, (300, 0), (300, height), size_line)
+        pg.draw.line(screen, Black, (300, 0), (300, height), size_line//10)
         pg.draw.line(screen, white, (600, 0), (600, height), size_line)
+        pg.draw.line(screen, Black, (600, 0), (600, height), size_line//10)
         pg.draw.line(screen, white, (900, 0), (900, height), size_line)
+        pg.draw.line(screen, Black, (900, 0), (900, height), size_line//10)
         pg.draw.line(screen, white, (1200, 0), (1200, height), size_line)
+        pg.draw.line(screen, Black, (1200, 0), (1200, height), size_line//10)
         pg.draw.line(screen, white, (1500, 0), (1500, height), size_line)
+        pg.draw.line(screen, Black, (1500, 0), (1500, height), size_line//10)
 
     # Diagonal roads for city character
-        pg.draw.circle(screen, yellow, (width // 2, height // 2), size_line * 2, size_line // 2)
-        pg.draw.line(screen, yellow, (0, 0), (width, height), size_line // 2)
-        pg.draw.line(screen, yellow, (width, 0), (0, height), size_line // 2)
+        pg.draw.circle(screen, yellow, (width // 2, height // 2), size_line * 1, size_line // 1)
+       
 
     # Draw all players in a loop
         for player in players:
