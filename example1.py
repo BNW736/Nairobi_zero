@@ -138,7 +138,7 @@ print(f"Number of Players: {number_of_players}")
 env = NairobiCityEnv(number_of_players=number_of_players)
 obs, _ = env.reset()
 model = PPO("MlpPolicy", env, verbose=1)
-model.learn(total_timesteps=1000000)
+model.learn(total_timesteps=10000000)
 
 print("Environment Ready!")
 print("Initial State:", obs)
@@ -146,7 +146,7 @@ print("Initial State:", obs)
 # Play with rendering enabled
 play_env = NairobiCityEnv(number_of_players=number_of_players, render_mode=True)
 obs, _ = play_env.reset()
-for _ in range(10000):
+for _ in range(100000):
     action, _ = model.predict(obs)  # Model chooses action
     obs, reward, terminated, truncated, info = play_env.step(action)
     play_env.render()  # View the game
