@@ -1,19 +1,19 @@
 import pygame as pg
 import random
-import gymnasium as gym
+
 import numpy as np
 
-class NairobiCityEnv(gym.Env):
-    width = 1800
-    height = 800
-    size = 20
-    size_line = 100
-    movemenet = 3
-    Black = (0, 0, 0)
+
+width = 1800
+height = 800
+size = 20
+size_line = 100
+movemenet = 3
+Black = (0, 0, 0)
 
 # Create 5 players with a loop
-    players = []
-    for i in range(5):
+players = []
+for i in range(5):
         players.append(
         {
             "x": (i + 1) * (width // 6),
@@ -25,10 +25,10 @@ class NairobiCityEnv(gym.Env):
             ),
         }
     )
-    pg.init()
-    screen = pg.display.set_mode((width, height))
-    running = True
-    while running:
+pg.init()
+screen = pg.display.set_mode((width, height))
+running = True
+while running:
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 running = False
@@ -106,4 +106,4 @@ class NairobiCityEnv(gym.Env):
 
         pg.display.flip()
 
-    pg.quit()
+pg.quit()

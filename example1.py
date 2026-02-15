@@ -97,7 +97,6 @@ class NairobiCityEnv(gym.Env,):
                 self.finished_players[i] = True
                 total_reward += 100 
             else:
-                # Add penalty to the TOTAL reward (scaled down to prevent huge negative numbers)
                 total_reward -= (0.1 + (0.01 * dist))
 
         # 5. Global Termination Check
@@ -107,7 +106,6 @@ class NairobiCityEnv(gym.Env,):
         return self._get_obs(), total_reward, terminated, truncated, {}
 
     def _get_obs(self):
-        #for better reading of the code
         all_coords = []
         for p in self.players:
             all_coords.extend([p["x"], p["y"]])
