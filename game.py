@@ -8,7 +8,7 @@ class NairobiCityEnv(gym.Env):
     height = 800
     size = 20
     size_line = 100
-    movemenet = 8
+    movemenet = 3
     Black = (0, 0, 0)
 
 # Create 5 players with a loop
@@ -82,11 +82,24 @@ class NairobiCityEnv(gym.Env):
         pg.draw.line(screen, Black, (1200, 0), (1200, height), size_line//10)
         pg.draw.line(screen, white, (1500, 0), (1500, height), size_line)
         pg.draw.line(screen, Black, (1500, 0), (1500, height), size_line//10)
+        circl={
+            "x":width//2,
+            "y":height//2
+        }
 
     # Diagonal roads for city character
-        pg.draw.circle(screen, yellow, (width // 2, height // 2), size_line * 1, size_line // 1)
-       
-
+        pg.draw.circle(screen, yellow, (circl["x"], circl["y"]), size_line * 1, size_line // 1)
+           
+        for player in players:
+            p1,p2=player ["x"],player["y"]
+            c1,c2=circl["x"],circl["y"]
+            dic=np.sqrt((p1-c1)**2+(p2-c2)**2)
+            hit_radius = size + size_line
+            if dic< hit_radius:
+                print("yes")
+                
+            
+           
     # Draw all players in a loop
         for player in players:
             pg.draw.rect(screen, player["color"], (player["x"], player["y"], size, size))

@@ -17,15 +17,14 @@ class NairobiCityEnv(gym.Env,):
         self.number_of_players = number_of_players
         self.width = 1800
         self.height = 800
-        self.size = 20
+        self.size = 30
         self.yellow = (255, 255, 0)
-        self.size_line = 40
-        self.movemenet = 5
+        self.size_line = 100
+        self.movemenet = 50
         self.render_mode = render_mode
         self.finished_players = [False] * self.number_of_players
         # The number of actions the agent is to take
-        actions_per_player = self.number_of_players * 4  # Each player has 4 possible actions
-        self.action_space = gym.spaces.Discrete(actions_per_player)
+        self.action_space = gym.spaces.MultiDiscrete([4] * self.number_of_players)
         self.number=self.number_of_players * 2
         self.observation_space = gym.spaces.Box(
             low=0, high=max(self.width, self.height), shape=(self.number,), dtype=np.float64
@@ -37,7 +36,7 @@ class NairobiCityEnv(gym.Env,):
 
     def reset(self, seed=None, options=None):
         # Specifies the initial state of the environmentand the players
-        
+        self.finished_players = [False] * self.number_of_players
         self.circle={"x":(self.width//2),"y":(self.height//2)}
 
         self.players = []
@@ -62,55 +61,51 @@ class NairobiCityEnv(gym.Env,):
         return obs, info
 
     def step(self, action):
-        player_idx = action // 4 
-        move_type = action % 4   
+        total_reward = 0
+        
+        # Loop through EVERY player to apply their specific action
+        for i in range(self.number_of_players):
+            
+            # 1. Skip if this player is already finished
+            if self.finished_players[i]:
+                continue
+            
+            # 2. Get the specific move for player 'i' from the action list
+            move_type = action[i]
 
-        # 1. CHECK IF THIS PLAYER IS ALREADY FINISHED
-        # If they are already in the circle, ignore their moves!
-        if self.finished_players[player_idx] == True:
-            reward = 0 
-            terminated = False
-            truncated = False
-            # Return old state, don't move them
-            return self._get_obs(), reward, terminated, truncated, {}
-
-        # 2. MOVE THE PLAYER (Standard Logic)
-        if player_idx < self.number_of_players:
-            if move_type == 0: self.players[player_idx]["x"] -= self.movemenet
-            elif move_type == 1: self.players[player_idx]["x"] += self.movemenet
-            elif move_type == 2: self.players[player_idx]["y"] -= self.movemenet
-            elif move_type == 3: self.players[player_idx]["y"] += self.movemenet
+            if move_type == 0:
+                self.players[i]["x"] -= self.movemenet
+            elif move_type == 1:
+                self.players[i]["x"] += self.movemenet
+            elif move_type == 2: 
+                self.players[i]["y"] -= self.movemenet
+            elif move_type == 3: 
+                self.players[i]["y"] += self.movemenet
 
             # Boundary checks
-            self.players[player_idx]["x"] = np.clip(self.players[player_idx]["x"], 0, self.width - self.size)
-            self.players[player_idx]["y"] = np.clip(self.players[player_idx]["y"], 0, self.height - self.size)
+            self.players[i]["x"] = np.clip(self.players[i]["x"], 0, self.width - self.size)
+            self.players[i]["y"] = np.clip(self.players[i]["y"], 0, self.height - self.size)
 
-        # 3. CHECK WIN CONDITION FOR THIS PLAYER
-        px, py = self.players[player_idx]["x"], self.players[player_idx]["y"]
-        cx, cy = self.circle["x"], self.circle["y"]
-        dist = np.sqrt((px - cx)**2 + (py - cy)**2)
-        
-        hit_radius = self.size + self.size_line
-
-        if dist < hit_radius:
-            self.finished_players[player_idx] = True # Mark this specific player as done!
-            reward = 100 # Big bonus for arriving
-        else:
-            reward = -0.1 - (0.01 * dist) # Normal distance penalty
-
-        # 4. CHECK IF *EVERYONE* IS FINISHED
-        # The game only ends if ALL values in the list are True
-        if all(self.finished_players):
-            terminated = True
-            print("EVERYONE MADE IT! Game Over.")
-        else:
-            terminated = False
+            # 4. Check Win Condition for THIS player
+            px, py = self.players[i]["x"], self.players[i]["y"]
+            cx, cy = self.circle["x"], self.circle["y"]
+            dist = np.sqrt((px - cx)**2 + (py - cy)**2)
             
-        truncated = False
-        obs = self._get_obs() # Helper function to get coords
-        return obs, reward, terminated, truncated, {}
+            hit_radius = self.size + self.size_line
 
-    # Helper to get observation (paste this inside your class)
+            if dist < hit_radius:
+                self.finished_players[i] = True
+                total_reward += 100 
+            else:
+                # Add penalty to the TOTAL reward (scaled down to prevent huge negative numbers)
+                total_reward -= (0.1 + (0.01 * dist))
+
+        # 5. Global Termination Check
+        terminated = all(self.finished_players)
+        truncated = False
+        
+        return self._get_obs(), total_reward, terminated, truncated, {}
+
     def _get_obs(self):
         #for better reading of the code
         all_coords = []
@@ -138,22 +133,22 @@ print(f"Number of Players: {number_of_players}")
 env = NairobiCityEnv(number_of_players=number_of_players)
 obs, _ = env.reset()
 model = PPO("MlpPolicy", env, verbose=1)
-model.learn(total_timesteps=10000000)
+model.learn(total_timesteps=50000)
+model.save("goal")
 
-print("Environment Ready!")
-print("Initial State:", obs)
+print("Environment Ready! Playing...")
 
-# Play with rendering enabled
+
 play_env = NairobiCityEnv(number_of_players=number_of_players, render_mode=True)
 obs, _ = play_env.reset()
-for _ in range(100000):
-    action, _ = model.predict(obs)  # Model chooses action
-    obs, reward, terminated, truncated, info = play_env.step(action)
-    play_env.render()  # View the game
 
+for _ in range(10000):
+    action, _ = model.predict(obs)
+    obs, reward, terminated, truncated, info = play_env.step(action)
+    play_env.render()
     if terminated:
-        obs, _ = env.reset()
-    print(
-        "Action:", action, "State:", obs, "Reward:", reward, "Terminated:", terminated
-    )
+        print("Game Finished! Resetting...")
+        obs, _ = play_env.reset()
+    time.sleep(0.05) 
+
 play_env.close()
