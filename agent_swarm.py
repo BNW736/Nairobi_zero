@@ -130,7 +130,7 @@ print(f"Number of Players: {number_of_players}")
 # Train without rendering
 env = NairobiCityEnv(number_of_players=number_of_players)
 obs, _ = env.reset()
-model = PPO("MlpPolicy", env, verbose=1)
+model = PPO("MlpPolicy", env, verbose=1,learning_rate=0.003,ent_coef=0)
 model.learn(total_timesteps=50000)
 model.save("goal")
 
