@@ -17,9 +17,9 @@ class NairobiCityEnv(gym.Env,):
         self.number_of_players = number_of_players
         self.width = 1800
         self.height = 800
-        self.size = 30
+        self.size = 16
         self.yellow = (255, 255, 0)
-        self.size_line = 100
+        self.size_line = 50
         self.movemenet = 50
         self.render_mode = render_mode
         self.finished_players = [False] * self.number_of_players
@@ -62,6 +62,10 @@ class NairobiCityEnv(gym.Env,):
 
     def step(self, action):
         total_reward = 0
+        all_coords = []
+        for p in self.players:
+            all_coords.extend([p["x"], p["y"]])
+        obs = np.array(all_coords, dtype=np.float64)
         
         # Loop through EVERY player to apply their specific action
         for i in range(self.number_of_players):
@@ -95,21 +99,15 @@ class NairobiCityEnv(gym.Env,):
 
             if dist < hit_radius:
                 self.finished_players[i] = True
-                total_reward += 100 
+                total_reward += 50
             else:
-                total_reward -= (0.1 + (0.01 * dist))
+                total_reward -= (0.1 + (0.1 * dist))
 
         # 5. Global Termination Check
         terminated = all(self.finished_players)
         truncated = False
         
-        return self._get_obs(), total_reward, terminated, truncated, {}
-
-    def _get_obs(self):
-        all_coords = []
-        for p in self.players:
-            all_coords.extend([p["x"], p["y"]])
-        return np.array(all_coords, dtype=np.float64)
+        return obs, total_reward, terminated, truncated, {}
 
     def render(self, seed=None, options=None):
         self.screen.fill((0, 0, 0))
@@ -122,8 +120,7 @@ class NairobiCityEnv(gym.Env,):
             )
         pg.display.update()
 
-    def close(self):
-        pg.quit()
+    
 number_of_players = int(input("Enter the number of players: "))
 print(f"Number of Players: {number_of_players}")
 
