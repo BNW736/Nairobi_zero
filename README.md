@@ -32,23 +32,5 @@ I created three different stages to learn how Reinforcement Learning works:
 
 ---
 
-## 🛠️ How to Run It
-
-1. **Install the libraries:**
-   ```bash
-   pip install gymnasium stable-baselines3 shimmy pygame numpy
-Run the AI Training:
-
-Bash
-python agent_swarm.py
-It will ask you how many players you want .
-
-Run Manual Mode:
-
-Bash
-python manual_game.py
-🐛 Known Issues / Things I am Learning
-The AI sometimes gets stuck in corners. I am still working on the "Reward Function" to fix this.
-
 
 

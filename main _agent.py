@@ -6,7 +6,13 @@ from stable_baselines3 import PPO
 import numpy as np
 import time
 
-
+"""This project is a learning and proof-of-concept initiative designed
+to explore a smarter way to reduce traffic congestion in Nairobi.
+The idea is that once a vehicle enters a designated control zone,
+an AI system temporarily takes control of the car and autonomously navigates it
+to its destination. The AI would optimize routing, coordinate with other vehicles, 
+and avoid collisions and traffic bottlenecks, with the goal of improving traffic flow, reducing 
+congestion, and enhancing road safety"""
 class NairobiCityEnv(
     gym.Env,
 ):
@@ -40,13 +46,16 @@ class NairobiCityEnv(
         self.CENTER_POINT = {"x": self.WIDTH // 2, "y": self.HEIGHT // 2}
         self.clock = pg.time.Clock()
         self.dt = 1.0 / self.fps 
+        #identifying what the bot can see
         self.action_space = gym.spaces.MultiDiscrete([4] * self.number_of_players)
-        self.number = self.number_of_players * 2
+        self.num_lights = len(self.VERTICAL_ROADS_X) + len(self.HORIZONTAL_ROADS_Y)
+        self.obs_size = (self.number_of_players * 2) + self.num_lights
+        
         self.observation_space = gym.spaces.Box(
             low=0,
-            high=max(self.WIDTH, self.HEIGHT),
-            shape=(self.number,),
-            dtype=np.float64,
+            high=1.0,
+            shape=(self.obs_size,),
+            dtype=np.float32,
         )
         if self.render_mode == True:
             self.screen = pg.display.set_mode((self.WIDTH, self.HEIGHT))
@@ -73,8 +82,9 @@ class NairobiCityEnv(
 
         # If all checks fail, you are OFF ROAD
         return False
-
+    
     def reset(self, seed=None, options=None):
+        """This is the player charateristics and the road in the environment"""
         # Create 5 players
         self.players = []
         for i in range(self.number_of_players):
@@ -98,14 +108,50 @@ class NairobiCityEnv(
             self.traffic_lights_y.append(
                 {"y": road_y, "state": random.randint(1, 2), "timer": 0.0}
             )
-        all_coords = []
-        for p in self.players:
-            all_coords.extend([p["x"], p["y"]])
-        obs = np.array(all_coords, dtype=np.float64)
+        
+        obs = self._get_obs()
         info = {}
         return obs, info
+    
+    def update_lights(self):
+        # Update timers and states for X-axis roads to change the colors
+        for light in self.traffic_lights_x:
+            light["timer"] += self.dt
+            current_state = light["state"]
+            # Check if it's time to change the color based on self.durations
+            if light["timer"] >= self.durations[current_state]:
+                light["timer"] = 0.0 # Reset timer
+                light["state"] = (current_state + 1) % 3 # Cycle: 0 (Green) -> 1 (Yellow) -> 2 (Red)
 
+        # Update timers and states for Y-axis roads
+        for light in self.traffic_lights_y:
+            light["timer"] += self.dt
+            current_state = light["state"]
+            if light["timer"] >= self.durations[current_state]:
+                light["timer"] = 0.0
+                light["state"] = (current_state + 1) % 3
+    #With some help from  ai 
+    def _get_obs(self):
+        """THIS is the ods the ai see in the environment"""
+        obs_list = []
+        # 1. Normalize player coordinates (divide by screen dimensions)
+        for p in self.players:
+            obs_list.extend([p["x"] / self.WIDTH, p["y"] / self.HEIGHT])
+            
+        # 2. Normalize traffic light states (divide by max state, which is 2)
+        for light_x in self.traffic_lights_x:
+            obs_list.append(light_x["state"] / 2.0)
+        for light_y in self.traffic_lights_y:
+            obs_list.append(light_y["state"] / 2.0)
+            
+        # 3. Cast to float32 (PyTorch prefers float32 over float64)
+        return np.array(obs_list, dtype=np.float32)
+                
     def step(self, action):
+        """This is the step that tell the ai what it can do and the penatly for speciftic movements and 
+        the goal of the game"""
+        #To loop the color
+        self.update_lights()
         reward = 0
         
         for i, player in enumerate(self.players):
@@ -114,7 +160,7 @@ class NairobiCityEnv(
             if player["finished"]:
                 reward = reward + 20
                 continue
-
+            #The actions the ai can make
             move = action[i]
 
             if move == 0:
@@ -131,57 +177,44 @@ class NairobiCityEnv(
             player["y"] = np.clip(player["y"], 0, self.HEIGHT - self.PLAYER_SIZE)
 
             # --- THE PENALTY CHECK ---
-
             dist_to_center = np.sqrt(
                 (player["x"] - self.CENTER_POINT["x"]) ** 2
                 + (player["y"] - self.CENTER_POINT["y"]) ** 2
             )
 
+            # Check Red Light Violations BEFORE the road check
+            red_light_penalty = 0
+            
+            # Check if crossing vertical roads on a red light
+            for light_x in self.traffic_lights_x:
+                if light_x["state"] == 2 and abs(player["x"] - light_x["x"]) < self.HALF_ROAD:
+                    red_light_penalty -= 20 # Strong penalty for running a red
+                    
+            # Check if crossing horizontal roads on a red light
+            for light_y in self.traffic_lights_y:
+                if light_y["state"] == 2 and abs(player["y"] - light_y["y"]) < self.HALF_ROAD:
+                    red_light_penalty -= 20 
+
+            # Apply the standard rewards and the new penalty
             if dist_to_center < 50:
                 player["finished"] = True
                 player["color"] = self.BLUE
                 print(f"Player {player['id']} Reached City Center!")
                 reward = reward + 100
+                
             elif self.check_on_road(player["x"], player["y"]):
                 player["color"] = self.GREEN
-                reward = reward + 30
-                reward -= 0.1 + (0.1 * dist_to_center)
-    
-            else:
-                player["color"] = self.RED
-                reward = reward - 30
+                reward = reward + 30 + red_light_penalty # Add the penalty here!
                 reward -= 0.1 + (0.1 * dist_to_center)
                 
-            for light in self.traffic_lights_x:
-                light["timer"] += self.dt
-                if light["timer"] >= self.durations[light["state"]]:
-                    light["timer"] = 0.0
-                    light["state"] = (light["state"] + 1) % 3
-                """if light["state"] == 0: 
-                    light_color = self.GREEN
-                elif light["state"] == 1:
-                    light_color = self.YELLOW
-                else: 
-                    light_color = self.RED"""
-               
+            else:
+                player["color"] = self.RED
+                reward = reward - 30 + red_light_penalty # And here!
+                reward -= 0.1 + (0.1 * dist_to_center)
+            
+        # Get the updated observation using our new helper method
+        obs = self._get_obs()
 
-            for light in self.traffic_lights_y:
-                light["timer"] += self.dt
-                if light["timer"] >= self.durations[light["state"]]:
-                    light["timer"] = 0.0
-                    light["state"] = (light["state"] + 1) % 3
-                """if light["state"] == 0: 
-                    light_color = self.GREEN
-                elif light["state"] == 1:
-                    light_color = self.YELLOW
-                else: 
-                    light_color = self.RED"""
-            all_coords=[]
-            for p in self.players:
-                all_coords.extend([p["x"], p["y"]])
-            obs = np.array(all_coords, dtype=np.float64)
-
-      
         # 5. Global Termination Check
         terminated = all(p["finished"] for p in self.players)
         truncated = False
@@ -189,6 +222,7 @@ class NairobiCityEnv(
         return obs, reward, terminated, truncated, {}
 
     def render(self, seed=None, options=None):
+        """Green is the back ground to represent grass and the lines the road """
         self.screen.fill(self.GREEN)
 
         # Draw Roads
@@ -208,31 +242,32 @@ class NairobiCityEnv(
                 self.screen, self.WHITE, (x, 0), (x, self.HEIGHT), self.ROAD_WIDTH // 12
             )
 
+        
         # Draw X traffic lights
-        for light in self.traffic_lights_x:
-            if light["state"] == 0: 
-                light_color = self.GREEN
-            elif light["state"] == 1:
-                light_color = self.YELLOW
+        for light_x in self.traffic_lights_x:
+            # Determine color based on this specific light's state
+            if light_x["state"] == 0: 
+                light_color_x = self.GREEN
+            elif light_x["state"] == 1:
+                light_color_x = self.YELLOW
             else: 
-                light_color = self.RED
+                light_color_x = self.RED
 
-            left_line_x = light["x"] - 50
-            right_line_x = light["x"] + 50
-            pg.draw.line(self.screen, light_color, (left_line_x, 0), (left_line_x, self.HEIGHT), 10)
-            pg.draw.line(self.screen, light_color, (right_line_x, 0), (right_line_x, self.HEIGHT), 10)
-    
+            left_line_x = light_x["x"] - 50
+            right_line_x = light_x["x"] + 50
+            pg.draw.line(self.screen, light_color_x, (left_line_x, 0), (left_line_x, self.HEIGHT), 10)
+            pg.draw.line(self.screen, light_color_x, (right_line_x, 0), (right_line_x, self.HEIGHT), 10)
         # Draw Y traffic lights
-        for light in self.traffic_lights_y:
-            if light["state"] == 0: 
+        for light_y in self.traffic_lights_y:
+            if light_y["state"] == 0: 
                 light_color = self.GREEN
-            elif light["state"] == 1:
+            elif light_y["state"] == 1:
                 light_color = self.YELLOW
             else: 
                 light_color = self.RED
 
-            left_line_y = light["y"] - 50
-            right_line_y = light["y"] + 50
+            left_line_y = light_y["y"] - 50
+            right_line_y = light_y["y"] + 50
             pg.draw.line(self.screen, light_color, (0, left_line_y), (self.WIDTH, left_line_y), 10)
             pg.draw.line(self.screen, light_color, (0, right_line_y), (self.WIDTH, right_line_y), 10)
 
@@ -261,18 +296,18 @@ class NairobiCityEnv(
 
         pg.display.flip()
         self.clock.tick(self.fps) 
+    
         
         
 # Train without rendering
 env = NairobiCityEnv()
 obs, _ = env.reset()
-model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.003, ent_coef=0)
-model.learn(total_timesteps=1)
+model = PPO("MlpPolicy", env, verbose=1, learning_rate=0.0003)
+#increase it to give the ai more time to learn
+model.learn(total_timesteps=500000)
 model.save("goal")
 
-
 print("Environment Ready! Playing...")
-
 
 play_env = NairobiCityEnv(render_mode=True)
 obs, _ = play_env.reset()
